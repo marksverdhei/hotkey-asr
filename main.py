@@ -9,9 +9,7 @@ from transformers import pipeline
 import torch
 
 # Configurable key combinations
-# sound_keys = {Key.shift, 'f'}
-# sound_keys = {Key.up}
-sound_keys = {"f"}
+sound_keys = {"f", "g"}  # Must press both simultaneously
 exit_keys = {'j', 'l'}
 
 pressed_keys = set()
@@ -27,10 +25,6 @@ stream = None
 p = None
 
 MODEL = "openai/whisper-base"
-# Norwegian
-# MODEL = "NbAiLab/nb-whisper-base"
-
-# Initialize the Whisper model pipeline
 device = 'cuda' if torch.cuda.is_available() else 'cpu'
 transcriber = pipeline(
     task="automatic-speech-recognition",
@@ -38,7 +32,6 @@ transcriber = pipeline(
     device=0 if device == 'cuda' else -1
 )
 
-# Functions for microphone recording
 def start_recording():
     global RECORDING, frames, stream, p
     p = pyaudio.PyAudio()
@@ -60,12 +53,14 @@ def start_recording():
 
 def stop_recording():
     global RECORDING, stream, p
+    if not RECORDING:  # Don't stop if not recording
+        return
+        
     RECORDING = False
     stream.stop_stream()
     stream.close()
     p.terminate()
 
-    # Save recording to a file
     wf = wave.open("output.wav", 'wb')
     wf.setnchannels(CHANNELS)
     wf.setsampwidth(p.get_sample_size(FORMAT))
@@ -74,7 +69,6 @@ def stop_recording():
     wf.close()
     print("Recording stopped and saved to output.wav")
 
-    # Transcribe the audio and copy to clipboard
     transcribe_and_copy("output.wav")
 
 def transcribe_and_copy(audio_file):
@@ -82,69 +76,89 @@ def transcribe_and_copy(audio_file):
     result = transcriber(audio_file)
     transcription = result['text']
     print("Transcription:", transcription)
-
-    # Copy transcription to clipboard
     pyperclip.copy(transcription)
     print("Transcription copied to clipboard.")
     play_loaded_sound()
 
 def play_enter_sound():
-    frequency = 440  # Frequency in Hertz
-    duration = 100  # Duration in milliseconds
+    frequency = 440
+    duration = 100
     winsound.Beep(frequency, duration)
 
 def play_exit_sound():
-    frequency = 220  # Frequency in Hertz
-    duration = 100  # Duration in milliseconds
+    frequency = 220
+    duration = 100
     winsound.Beep(frequency, duration)
 
 def play_loaded_sound():
-    frequency = 660  # Frequency in Hertz
-    duration = 100  # Duration in milliseconds
+    frequency = 660
+    duration = 100
     winsound.Beep(frequency, duration)
 
+def check_keys():
+    """Debug function to print current key state"""
+    print(f"Current pressed keys: {pressed_keys}")
+    print(f"Required sound keys: {sound_keys}")
+    print(f"All required keys pressed? {sound_keys.issubset(pressed_keys)}")
+    print(f"Extra keys pressed? {pressed_keys - sound_keys}")
 
 def on_press(key):
     global RECORDING
     try:
-        # Handle character keys
-        if key.char in sound_keys or key.char in exit_keys:
-            if key.char not in pressed_keys:
-                pressed_keys.add(key.char)
-                print(f"Key pressed: {key.char}")
+        # Convert key to lowercase string if it's a character
+        if hasattr(key, 'char') and key.char is not None:
+            key_char = key.char.lower()
+        else:
+            return  # Ignore non-character keys
+            
+        # Add key to pressed_keys if it's a sound key or exit key
+        if key_char in sound_keys or key_char in exit_keys:
+            pressed_keys.add(key_char)
+            # print(f"\nKey pressed: {key_char}")
+            # check_keys()  # Debug print
 
-                # Play sound and start recording for sound keys
-                if key.char in sound_keys:
+            # Check for recording condition: all sound keys must be pressed
+            if not RECORDING and sound_keys.issubset(pressed_keys):
+                # Only start if we have exactly the sound keys pressed
+                if pressed_keys.intersection(sound_keys) == sound_keys:
                     play_enter_sound()
-                    if not RECORDING:
-                        start_recording()
+                    start_recording()
 
-                # Check if all keys in exit_keys are pressed
-                if exit_keys.issubset(pressed_keys):
-                    print(f"{exit_keys} pressed together. Exiting...")
-                    return False
-    except AttributeError:
-        # Handle special keys (ignored in this case)
+            # Check for exit condition
+            if exit_keys.issubset(pressed_keys):
+                print(f"{exit_keys} pressed together. Exiting...")
+                return False
+
+    except AttributeError as e:
+        print(f"Error handling key press: {e}")
         pass
 
 def on_release(key):
     global RECORDING
     try:
-        # Handle character keys
-        if key.char in sound_keys or key.char in exit_keys:
-            if key.char in pressed_keys:
-                pressed_keys.remove(key.char)
-                print(f"Key released: {key.char}")
-                play_exit_sound()
+        # Convert key to lowercase string if it's a character
+        if hasattr(key, 'char') and key.char is not None:
+            key_char = key.char.lower()
+        else:
+            return  # Ignore non-character keys
 
-                # Stop recording for sound keys
-                if key.char in sound_keys and RECORDING:
-                    stop_recording()
-    except AttributeError:
-        # Handle special keys (ignored in this case)
+        # Remove key from pressed_keys if it's there
+        if key_char in pressed_keys:
+            pressed_keys.remove(key_char)
+            print(f"\nKey released: {key_char}")
+            # check_keys()  # Debug print
+
+            # Stop recording if any required sound key is released
+            if RECORDING and key_char in sound_keys:
+                play_exit_sound()
+                stop_recording()
+
+    except AttributeError as e:
+        print(f"Error handling key release: {e}")
         pass
 
 # Set up the listener
 with Listener(on_press=on_press, on_release=on_release) as listener:
-    print(f"Press {'+'.join(sound_keys)} to start/stop recording. Press {'+'.join(exit_keys)} together to exit...")
+    print(f"Press {'+'.join(sound_keys)} together to start recording.")
+    print(f"Press {'+'.join(exit_keys)} together to exit...")
     listener.join()
