@@ -1,5 +1,4 @@
-from pynput.keyboard import Listener
-from pynput.keyboard import Key
+from pynput.keyboard import Listener, Key
 import winsound
 import pyaudio
 import wave
@@ -8,9 +7,9 @@ import pyperclip
 from transformers import pipeline
 import torch
 
-# Configurable key combinations
-sound_keys = {"f", "g"}  # Must press both simultaneously
-exit_keys = {'j', 'l'}
+# Configurable key combinations (using Key enum for special keys)
+sound_keys = {Key.shift_l, Key.ctrl_l}  # Left Shift + F to start/stop recording
+exit_keys = {'q', Key.ctrl_l}    # Left Ctrl + Q to exit
 
 pressed_keys = set()
 
@@ -24,7 +23,10 @@ frames = []
 stream = None
 p = None
 
-MODEL = "openai/whisper-base"
+# MODEL = "openai/whisper-base"
+MODEL = "NbAiLab/nb-whisper-base"
+
+
 device = 'cuda' if torch.cuda.is_available() else 'cpu'
 transcriber = pipeline(
     task="automatic-speech-recognition",
@@ -95,70 +97,62 @@ def play_loaded_sound():
     duration = 100
     winsound.Beep(frequency, duration)
 
-def check_keys():
-    """Debug function to print current key state"""
-    print(f"Current pressed keys: {pressed_keys}")
-    print(f"Required sound keys: {sound_keys}")
-    print(f"All required keys pressed? {sound_keys.issubset(pressed_keys)}")
-    print(f"Extra keys pressed? {pressed_keys - sound_keys}")
+def normalize_key(key):
+    """Convert key to a comparable format"""
+    if isinstance(key, Key):
+        return key
+    if hasattr(key, 'char') and key.char is not None:
+        return key.char.lower()
+    return key
+
+def check_key_combination(required_keys):
+    """Check if all required keys are pressed"""
+    normalized_pressed = {normalize_key(k) for k in pressed_keys}
+    normalized_required = {normalize_key(k) for k in required_keys}
+    return normalized_required.issubset(normalized_pressed)
 
 def on_press(key):
     global RECORDING
     try:
-        # Convert key to lowercase string if it's a character
-        if hasattr(key, 'char') and key.char is not None:
-            key_char = key.char.lower()
-        else:
-            return  # Ignore non-character keys
+        normalized_key = normalize_key(key)
+        if normalized_key in {normalize_key(k) for k in sound_keys.union(exit_keys)}:
+            pressed_keys.add(key)
             
-        # Add key to pressed_keys if it's a sound key or exit key
-        if key_char in sound_keys or key_char in exit_keys:
-            pressed_keys.add(key_char)
-            # print(f"\nKey pressed: {key_char}")
-            # check_keys()  # Debug print
-
-            # Check for recording condition: all sound keys must be pressed
-            if not RECORDING and sound_keys.issubset(pressed_keys):
-                # Only start if we have exactly the sound keys pressed
-                if pressed_keys.intersection(sound_keys) == sound_keys:
-                    play_enter_sound()
-                    start_recording()
+            # Check for recording condition
+            if not RECORDING and check_key_combination(sound_keys):
+                play_enter_sound()
+                start_recording()
 
             # Check for exit condition
-            if exit_keys.issubset(pressed_keys):
-                print(f"{exit_keys} pressed together. Exiting...")
+            if check_key_combination(exit_keys):
+                print(f"Exit key combination pressed. Exiting...")
                 return False
 
-    except AttributeError as e:
+    except Exception as e:
         print(f"Error handling key press: {e}")
-        pass
 
 def on_release(key):
     global RECORDING
     try:
-        # Convert key to lowercase string if it's a character
-        if hasattr(key, 'char') and key.char is not None:
-            key_char = key.char.lower()
-        else:
-            return  # Ignore non-character keys
-
+        normalized_key = normalize_key(key)
         # Remove key from pressed_keys if it's there
-        if key_char in pressed_keys:
-            pressed_keys.remove(key_char)
-            print(f"\nKey released: {key_char}")
-            # check_keys()  # Debug print
+        if key in pressed_keys:
+            pressed_keys.remove(key)
 
             # Stop recording if any required sound key is released
-            if RECORDING and key_char in sound_keys:
+            if RECORDING and normalized_key in {normalize_key(k) for k in sound_keys}:
                 play_exit_sound()
                 stop_recording()
 
-    except AttributeError as e:
+    except Exception as e:
         print(f"Error handling key release: {e}")
-        pass
+
+# Format the key combinations for display
+def format_key_combo(keys):
+    return ' + '.join(str(k).replace('Key.', '') if isinstance(k, Key) else k.upper() for k in keys)
 
 # Set up the listener
 with Listener(on_press=on_press, on_release=on_release) as listener:
-    print(f"Press {'+'.join(sound_keys)} together to start recording.")
-    print(f"Press {'+'.join(exit_keys)} together to exit...")
+    print(f"Press {format_key_combo(sound_keys)} together to start recording.")
+    print(f"Press {format_key_combo(exit_keys)} together to exit...")
     listener.join()
