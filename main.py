@@ -10,8 +10,8 @@ import torch
 
 # Configurable key combinations
 # sound_keys = {Key.shift, 'f'}
-sound_keys = {'f'}
-
+# sound_keys = {Key.up}
+sound_keys = {"f"}
 exit_keys = {'j', 'l'}
 
 pressed_keys = set()
@@ -146,5 +146,5 @@ def on_release(key):
 
 # Set up the listener
 with Listener(on_press=on_press, on_release=on_release) as listener:
-    print("Press 'f' to start/stop recording. Press 'j' and 'l' together to exit...")
+    print(f"Press {'+'.join(sound_keys)} to start/stop recording. Press {'+'.join(exit_keys)} together to exit...")
     listener.join()
