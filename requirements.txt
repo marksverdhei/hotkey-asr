@@ -1,0 +1,6 @@
+pynput
+pyaudio
+wave
+pyperclip
+torch
+transformers
