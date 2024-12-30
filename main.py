@@ -1,4 +1,5 @@
-from pynput.keyboard import Listener, Key
+from pynput.keyboard import Listener as KeyboardListener, Key
+from pynput.mouse import Listener as MouseListener, Button
 import winsound
 import pyaudio
 import wave
@@ -7,11 +8,11 @@ import pyperclip
 from transformers import pipeline
 import torch
 
-# Configurable key combinations (using Key enum for special keys)
-sound_keys = {Key.shift_l, Key.ctrl_l}  # Left Shift + F to start/stop recording
-exit_keys = {'q', Key.ctrl_l}    # Left Ctrl + Q to exit
+# Configurable key combinations (using Key enum for special keys and Button enum for mouse buttons)
+sound_triggers = {Button.x1}  # Left Shift + Right Mouse Button to start/stop recording
+exit_triggers = {'q', Key.ctrl_l}    # Left Ctrl + Q to exit
 
-pressed_keys = set()
+pressed_triggers = set()
 
 # Audio recording configuration
 CHUNK = 1024
@@ -23,16 +24,17 @@ frames = []
 stream = None
 p = None
 
-# MODEL = "openai/whisper-base"
-MODEL = "NbAiLab/nb-whisper-base"
-
+MODEL = "openai/whisper-base"
+DEVICE = -1
 
 device = 'cuda' if torch.cuda.is_available() else 'cpu'
 transcriber = pipeline(
     task="automatic-speech-recognition",
     model=MODEL,
-    device=0 if device == 'cuda' else -1
+    device=DEVICE
 )
+
+print(transcriber.model.device)
 
 def start_recording():
     global RECORDING, frames, stream, p
@@ -97,62 +99,91 @@ def play_loaded_sound():
     duration = 100
     winsound.Beep(frequency, duration)
 
-def normalize_key(key):
-    """Convert key to a comparable format"""
-    if isinstance(key, Key):
-        return key
-    if hasattr(key, 'char') and key.char is not None:
-        return key.char.lower()
-    return key
+def normalize_trigger(trigger):
+    """Convert keyboard key or mouse button to a comparable format"""
+    if isinstance(trigger, (Key, Button)):
+        return trigger
+    if hasattr(trigger, 'char') and trigger.char is not None:
+        return trigger.char.lower()
+    return trigger
 
-def check_key_combination(required_keys):
-    """Check if all required keys are pressed"""
-    normalized_pressed = {normalize_key(k) for k in pressed_keys}
-    normalized_required = {normalize_key(k) for k in required_keys}
+def check_trigger_combination(required_triggers):
+    """Check if all required triggers are pressed"""
+    normalized_pressed = {normalize_trigger(t) for t in pressed_triggers}
+    normalized_required = {normalize_trigger(t) for t in required_triggers}
     return normalized_required.issubset(normalized_pressed)
 
 def on_press(key):
-    global RECORDING
     try:
-        normalized_key = normalize_key(key)
-        if normalized_key in {normalize_key(k) for k in sound_keys.union(exit_keys)}:
-            pressed_keys.add(key)
+        normalized_key = normalize_trigger(key)
+        if normalized_key in {normalize_trigger(k) for k in sound_triggers.union(exit_triggers)}:
+            pressed_triggers.add(key)
             
             # Check for recording condition
-            if not RECORDING and check_key_combination(sound_keys):
+            if not RECORDING and check_trigger_combination(sound_triggers):
                 play_enter_sound()
                 start_recording()
 
             # Check for exit condition
-            if check_key_combination(exit_keys):
-                print(f"Exit key combination pressed. Exiting...")
+            if check_trigger_combination(exit_triggers):
+                print(f"Exit combination pressed. Exiting...")
                 return False
 
     except Exception as e:
         print(f"Error handling key press: {e}")
 
 def on_release(key):
-    global RECORDING
     try:
-        normalized_key = normalize_key(key)
-        # Remove key from pressed_keys if it's there
-        if key in pressed_keys:
-            pressed_keys.remove(key)
+        normalized_key = normalize_trigger(key)
+        # Remove key from pressed_triggers if it's there
+        if key in pressed_triggers:
+            pressed_triggers.remove(key)
 
-            # Stop recording if any required sound key is released
-            if RECORDING and normalized_key in {normalize_key(k) for k in sound_keys}:
+            # Stop recording if any required sound trigger is released
+            if RECORDING and normalized_key in {normalize_trigger(t) for t in sound_triggers}:
                 play_exit_sound()
                 stop_recording()
 
     except Exception as e:
         print(f"Error handling key release: {e}")
 
-# Format the key combinations for display
-def format_key_combo(keys):
-    return ' + '.join(str(k).replace('Key.', '') if isinstance(k, Key) else k.upper() for k in keys)
+def on_click(x, y, button, pressed):
+    try:
+        if pressed:
+            if button in {normalize_trigger(t) for t in sound_triggers}:
+                pressed_triggers.add(button)
+                
+                # Check for recording condition
+                if not RECORDING and check_trigger_combination(sound_triggers):
+                    play_enter_sound()
+                    start_recording()
+        else:  # Released
+            if button in pressed_triggers:
+                pressed_triggers.remove(button)
+                
+                # Stop recording if any required sound trigger is released
+                if RECORDING and button in {normalize_trigger(t) for t in sound_triggers}:
+                    play_exit_sound()
+                    stop_recording()
+    except Exception as e:
+        print(f"Error handling mouse click: {e}")
 
-# Set up the listener
-with Listener(on_press=on_press, on_release=on_release) as listener:
-    print(f"Press {format_key_combo(sound_keys)} together to start recording.")
-    print(f"Press {format_key_combo(exit_keys)} together to exit...")
-    listener.join()
+# Format the trigger combinations for display
+def format_trigger_combo(triggers):
+    return ' + '.join(str(t).replace('Key.', '').replace('Button.', '') 
+                     if isinstance(t, (Key, Button)) else t.upper() 
+                     for t in triggers)
+
+# Set up both listeners
+keyboard_listener = KeyboardListener(on_press=on_press, on_release=on_release)
+mouse_listener = MouseListener(on_click=on_click)
+
+# Start both listeners
+keyboard_listener.start()
+mouse_listener.start()
+
+print(f"Press {format_trigger_combo(sound_triggers)} together to start recording.")
+print(f"Press {format_trigger_combo(exit_triggers)} together to exit...")
+
+# Keep the program running until the keyboard listener stops
+keyboard_listener.join()
