@@ -26,11 +26,15 @@ frames = []
 stream = None
 p = None
 
+MODEL = "openai/whisper-base"
+# Norwegian
+# MODEL = "NbAiLab/nb-whisper-base"
+
 # Initialize the Whisper model pipeline
 device = 'cuda' if torch.cuda.is_available() else 'cpu'
 transcriber = pipeline(
     task="automatic-speech-recognition",
-    model="openai/whisper-base",
+    model=MODEL,
     device=0 if device == 'cuda' else -1
 )
 
