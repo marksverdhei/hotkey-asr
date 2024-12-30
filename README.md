@@ -1,6 +1,7 @@
 # ASR Clipboard Hotkey
 
-Hotkey asr for windows using whisper.
+Hotkey asr for windows using whisper. Hold a hotkey to record. After releasing, the recording is transcribed 
+until you hear a high pitched beep. That means the transcription is done and is added to your clipboard.
 
 ## Disclaimer  
 
