@@ -4,3 +4,4 @@ wave
 pyperclip
 torch
 transformers
+torchaudio

@@ -8,7 +8,8 @@ import pyperclip
 from transformers import pipeline
 import torch
 import yaml
-
+import io
+import numpy as np
 
 def convert(l) -> set:
     return {eval(i) if "." in i else i for i in l} 
@@ -18,10 +19,8 @@ with open(config_path) as f:
     config = yaml.safe_load(f.read())
 
 hotkeys = config["hotkeys"]
-
 sound_triggers = convert(hotkeys["record"])
 exit_triggers = convert(hotkeys["exit"])
-
 pressed_triggers = set()
 
 # Audio recording configuration
@@ -44,8 +43,6 @@ transcriber = pipeline(
     device=DEVICE
 )
 
-print(transcriber.model.device)
-
 def start_recording():
     global RECORDING, frames, stream, p
     p = pyaudio.PyAudio()
@@ -67,7 +64,7 @@ def start_recording():
 
 def stop_recording():
     global RECORDING, stream, p
-    if not RECORDING:  # Don't stop if not recording
+    if not RECORDING:
         return
         
     RECORDING = False
@@ -75,19 +72,24 @@ def stop_recording():
     stream.close()
     p.terminate()
 
-    wf = wave.open("output.wav", 'wb')
-    wf.setnchannels(CHANNELS)
-    wf.setsampwidth(p.get_sample_size(FORMAT))
-    wf.setframerate(RATE)
-    wf.writeframes(b''.join(frames))
-    wf.close()
-    print("Recording stopped and saved to output.wav")
+    # Create in-memory WAV file
+    wav_buffer = io.BytesIO()
+    with wave.open(wav_buffer, 'wb') as wf:
+        wf.setnchannels(CHANNELS)
+        wf.setsampwidth(p.get_sample_size(FORMAT))
+        wf.setframerate(RATE)
+        wf.writeframes(b''.join(frames))
+    
+    # Convert WAV to numpy array for the model
+    wav_buffer.seek(0)
+    with wave.open(wav_buffer, 'rb') as wf:
+        audio_data = np.frombuffer(wf.readframes(wf.getnframes()), dtype=np.int16).astype(np.float32) / 32768.0
+        
+    transcribe_and_copy(audio_data)
 
-    transcribe_and_copy("output.wav")
-
-def transcribe_and_copy(audio_file):
+def transcribe_and_copy(audio_data):
     print("Transcribing audio...")
-    result = transcriber(audio_file)
+    result = transcriber({"sampling_rate": RATE, "raw": audio_data})
     transcription = result['text']
     print("Transcription:", transcription)
     pyperclip.copy(transcription)
@@ -110,7 +112,6 @@ def play_loaded_sound():
     winsound.Beep(frequency, duration)
 
 def normalize_trigger(trigger):
-    """Convert keyboard key or mouse button to a comparable format"""
     if isinstance(trigger, (Key, Button)):
         return trigger
     if hasattr(trigger, 'char') and trigger.char is not None:
@@ -118,7 +119,6 @@ def normalize_trigger(trigger):
     return trigger
 
 def check_trigger_combination(required_triggers):
-    """Check if all required triggers are pressed"""
     normalized_pressed = {normalize_trigger(t) for t in pressed_triggers}
     normalized_required = {normalize_trigger(t) for t in required_triggers}
     return normalized_required.issubset(normalized_pressed)
@@ -129,14 +129,12 @@ def on_press(key):
         if normalized_key in {normalize_trigger(k) for k in sound_triggers.union(exit_triggers)}:
             pressed_triggers.add(key)
             
-            # Check for recording condition
             if not RECORDING and check_trigger_combination(sound_triggers):
                 play_enter_sound()
                 start_recording()
 
-            # Check for exit condition
             if check_trigger_combination(exit_triggers):
-                print(f"Exit combination pressed. Exiting...")
+                print("Exit combination pressed. Exiting...")
                 return False
 
     except Exception as e:
@@ -145,11 +143,9 @@ def on_press(key):
 def on_release(key):
     try:
         normalized_key = normalize_trigger(key)
-        # Remove key from pressed_triggers if it's there
         if key in pressed_triggers:
             pressed_triggers.remove(key)
 
-            # Stop recording if any required sound trigger is released
             if RECORDING and normalized_key in {normalize_trigger(t) for t in sound_triggers}:
                 play_exit_sound()
                 stop_recording()
@@ -163,37 +159,31 @@ def on_click(x, y, button, pressed):
             if button in {normalize_trigger(t) for t in sound_triggers}:
                 pressed_triggers.add(button)
                 
-                # Check for recording condition
                 if not RECORDING and check_trigger_combination(sound_triggers):
                     play_enter_sound()
                     start_recording()
-        else:  # Released
+        else:
             if button in pressed_triggers:
                 pressed_triggers.remove(button)
                 
-                # Stop recording if any required sound trigger is released
                 if RECORDING and button in {normalize_trigger(t) for t in sound_triggers}:
                     play_exit_sound()
                     stop_recording()
     except Exception as e:
         print(f"Error handling mouse click: {e}")
 
-# Format the trigger combinations for display
 def format_trigger_combo(triggers):
     return ' + '.join(str(t).replace('Key.', '').replace('Button.', '') 
                      if isinstance(t, (Key, Button)) else t.upper() 
                      for t in triggers)
 
-# Set up both listeners
 keyboard_listener = KeyboardListener(on_press=on_press, on_release=on_release)
 mouse_listener = MouseListener(on_click=on_click)
 
-# Start both listeners
 keyboard_listener.start()
 mouse_listener.start()
 
 print(f"Press {format_trigger_combo(sound_triggers)} together to start recording.")
 print(f"Press {format_trigger_combo(exit_triggers)} together to exit...")
 
-# Keep the program running until the keyboard listener stops
 keyboard_listener.join()
