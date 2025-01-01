@@ -1,0 +1,4 @@
+hotkeys:
+  # button x1 is the back button on the side of the mouse in windows
+  record: ["Button.x1"]
+  exit: ["Key.ctrl_l", "q"]

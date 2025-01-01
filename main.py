@@ -7,10 +7,20 @@ import threading
 import pyperclip
 from transformers import pipeline
 import torch
+import yaml
 
-# Configurable key combinations (using Key enum for special keys and Button enum for mouse buttons)
-sound_triggers = {Button.x1}  # Left Shift + Right Mouse Button to start/stop recording
-exit_triggers = {'q', Key.ctrl_l}    # Left Ctrl + Q to exit
+
+def convert(l) -> set:
+    return {eval(i) if "." in i else i for i in l} 
+
+config_path = "config.yaml"
+with open(config_path) as f:
+    config = yaml.safe_load(f.read())
+
+hotkeys = config["hotkeys"]
+
+sound_triggers = convert(hotkeys["record"])
+exit_triggers = convert(hotkeys["exit"])
 
 pressed_triggers = set()
 
