@@ -33,16 +33,15 @@ frames = []
 stream = None
 p = None
 
-MODEL = "openai/whisper-base"
-# MODEL = "NbAiLab/nb-whisper-base"
-DEVICE = -1
+MODEL = config["model"]
+DEVICE = config["device"]
 
-device = 'cuda' if torch.cuda.is_available() else 'cpu'
 transcriber = pipeline(
     task="automatic-speech-recognition",
     model=MODEL,
     device=DEVICE
 )
+print(transcriber.model.device)
 
 def start_recording():
     global RECORDING, frames, stream, p

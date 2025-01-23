@@ -1,4 +1,7 @@
 hotkeys:
-  # button x1 is the back button on the side of the mouse in windows
-  record: ["Button.x1"]
+  record: ["f"]
+  # record: ["Button.x1"]
   exit: ["Key.ctrl_l", "q"]
+
+device: 1
+model: "openai/whisper-base"
