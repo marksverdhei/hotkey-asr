@@ -1,4 +1,3 @@
-import os
 import winsound
 import pyaudio
 import wave
@@ -9,27 +8,26 @@ import io
 import numpy as np
 import sounddevice as sd
 from pydub import AudioSegment
-import dotenv
-dotenv.load_dotenv(".env")
-# If you have a standard openai package:
-#   pip install openai
-# then do:
-# import openai
-#
-# If you have a custom "OpenAI" class (from your snippet #3):
-#   from openai import OpenAI
-# and later instantiate it with:
-#   client = OpenAI()
-#
-# For simplicity here, I'll use the snippet #3 style:
-from openai import OpenAI
 
 from pynput.keyboard import Listener as KeyboardListener, Key
+from pynput.keyboard import Controller as KeyboardController
 from pynput.mouse import Listener as MouseListener, Button
 from transformers import pipeline
+import os
+# If you have a standard openai package:
+#   pip install openai
+#   import openai
+#
+# If you have your custom snippet #3 style "OpenAI" class:
+from openai import OpenAI
+import dotenv
+dotenv.load_dotenv(".env")
+############################################################
+#                 CONFIG & GLOBAL VARIABLES               #
+############################################################
 
 def convert(l) -> set:
-    return {eval(i) if "." in i else i for i in l} 
+    return {eval(i) if "." in i else i for i in l}
 
 config_path = "config.yaml"
 with open(config_path) as f:
@@ -59,13 +57,38 @@ transcriber = pipeline(
     model=MODEL,
     device=DEVICE
 )
-
-# If using the standard openai library, you'd do something like:
-# openai.api_key = config["openai_api_key"]
-
-# Using your snippet #3 style:
 print(os.getenv("OPENAI_API_KEY")[-5:])
-client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
+
+client = OpenAI()
+
+# ### NEW ###
+# Optional: parse the key string from the config
+key_during_tts_str = config.get("key_during_tts", None)  # e.g. "Key.ctrl_l" or "a"
+
+# We'll use a simple parser that can handle "Key.xxx" or single characters
+def parse_key_str(key_str):
+    """
+    Convert a string like 'Key.ctrl_l' or 'a'
+    into a pynput.keyboard.Key or a character.
+    """
+    if not key_str:
+        return None
+    
+    # If it starts with "Key.", parse as special Key
+    if key_str.startswith("Key."):
+        # e.g. "Key.ctrl_l" -> Key.ctrl_l
+        subkey = key_str[4:]  # everything after "Key."
+        # Attempt to retrieve Key.subkey from pynput.keyboard
+        return getattr(Key, subkey, None)
+    else:
+        # Otherwise treat it as a normal character.
+        # e.g. "a" -> "a"
+        return key_str
+
+key_during_tts = parse_key_str(key_during_tts_str)
+
+# We'll need a keyboard controller to press/release keys
+keyboard_controller = KeyboardController()
 
 ############################################################
 #                   UTILITY FUNCTIONS                      #
@@ -84,7 +107,7 @@ def play_exit_sound():
     winsound.Beep(frequency, duration)
 
 def play_tts_beep():
-    """Beep to indicate TTS audio is being played to VB cable."""
+    """Beep to indicate TTS audio is about to be played."""
     frequency = 660
     duration = 100
     winsound.Beep(frequency, duration)
@@ -154,9 +177,7 @@ def tts_openai(text):
     This uses your snippet #3 pattern:
         response = client.audio.speech.create(...)
         response.stream_to_file(...)
-    Returns the path to the generated .mp3 file.
     """
-    # You may need to adapt the voice/model per your TTS subscription or usage:
     speech_file_path = "tts_output.mp3"
     response = client.audio.speech.create(
         model="tts-1",   # adjust if needed
@@ -168,7 +189,6 @@ def tts_openai(text):
 
 def play_tts_audio(mp3_path):
     """Play the TTS mp3 file through the VB Cable input device."""
-    # First beep to indicate TTS playback
     play_tts_beep()
 
     # Load audio file
@@ -185,18 +205,31 @@ def play_tts_audio(mp3_path):
     if channels > 1:
         raw_data = raw_data.reshape((-1, channels))
 
-    # Find VB Cable device
-    device_name = "CABLE Input"
-    devices = sd.query_devices()
-    vb_device = next((d for d in devices if device_name in d['name']), None)
+    # ### NEW ###
+    # Press (hold) the configured key if it exists
+    if key_during_tts is not None:
+        print(f"Holding down key: {key_during_tts_str}")
+        keyboard_controller.press(key_during_tts)
 
-    if vb_device:
-        device_index = vb_device['index']
-        print(f"Playing TTS audio on device: {vb_device['name']}")
-        sd.play(raw_data, samplerate=sample_rate, device=device_index)
-        sd.wait()
-    else:
-        print("VB Cable device not found. Check the device name and try again.")
+    try:
+        # Find VB Cable device
+        device_name = "CABLE Input"
+        devices = sd.query_devices()
+        vb_device = next((d for d in devices if device_name in d['name']), None)
+
+        if vb_device:
+            device_index = vb_device['index']
+            print(f"Playing TTS audio on device: {vb_device['name']}")
+            sd.play(raw_data, samplerate=sample_rate, device=device_index)
+            sd.wait()
+        else:
+            print("VB Cable device not found. Check the device name and try again.")
+    finally:
+        # ### NEW ###
+        # Release the key after playback finishes
+        if key_during_tts is not None:
+            print(f"Releasing key: {key_during_tts_str}")
+            keyboard_controller.release(key_during_tts)
 
 ############################################################
 #                  HOTKEY/MOUSE LISTENERS                  #
