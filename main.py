@@ -34,6 +34,7 @@ stream = None
 p = None
 
 MODEL = "openai/whisper-base"
+# MODEL = "NbAiLab/nb-whisper-base"
 DEVICE = -1
 
 device = 'cuda' if torch.cuda.is_available() else 'cpu'
