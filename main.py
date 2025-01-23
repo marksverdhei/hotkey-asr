@@ -1,3 +1,4 @@
+import time
 import winsound
 import pyaudio
 import wave
@@ -47,6 +48,7 @@ RECORDING = False
 frames = []
 stream = None
 p = None
+PLAY_PADDING = 0.5  # seconds
 
 MODEL = config["model"]
 DEVICE = config["device"]
@@ -222,6 +224,8 @@ def play_tts_audio(mp3_path):
             print(f"Playing TTS audio on device: {vb_device['name']}")
             sd.play(raw_data, samplerate=sample_rate, device=device_index)
             sd.wait()
+            time.sleep(PLAY_PADDING)  # <-- Adjust duration as needed
+
         else:
             print("VB Cable device not found. Check the device name and try again.")
     finally:
