@@ -90,7 +90,7 @@ def stop_recording():
 def transcribe_and_copy(audio_data):
     print("Transcribing audio...")
     result = transcriber({"sampling_rate": RATE, "raw": audio_data})
-    transcription = result['text']
+    transcription = result['text'].strip()
     print("Transcription:", transcription)
     pyperclip.copy(transcription)
     print("Transcription copied to clipboard.")
