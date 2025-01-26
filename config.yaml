@@ -7,4 +7,7 @@ device: 1
 model: "openai/whisper-base"
 key_during_tts: "l"
 
-local: false
+local: true
+
+voice_profile: "nova"
+# voice_profile: "ash"

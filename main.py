@@ -1,5 +1,7 @@
 import time
 import winsound
+from elevenlabs import save
+import elevenlabs
 import pyaudio
 import wave
 import threading
@@ -24,6 +26,7 @@ from openai import OpenAI
 #                 CONFIG & GLOBAL VARIABLES               #
 ############################################################
 
+
 def convert(l) -> set:
     return {eval(i) if "." in i else i for i in l}
 
@@ -36,6 +39,7 @@ sound_triggers = convert(hotkeys["record"])
 exit_triggers = convert(hotkeys["exit"])
 pressed_triggers = set()
 
+VOICE_PROFILE = config["voice_profile"]
 # Audio recording configuration
 CHUNK = 1024
 FORMAT = pyaudio.paInt16
@@ -45,11 +49,43 @@ RECORDING = False
 frames = []
 stream = None
 p = None
-PLAY_PADDING = 0.5  # seconds
+PLAY_PADDING = 1  # seconds
 
 MODEL = config["model"]
 DEVICE = config["device"]
 LOCAL = config["local"]
+
+tts_oai = False
+
+elevenlabs_client = elevenlabs.ElevenLabs(api_key=os.getenv("ELEVENLABS_API_KEY"))
+
+def tts_openai(text):
+    speech_file_path = "tts_output.mp3"
+    response = client.audio.speech.create(
+        model="tts-1",
+        voice=VOICE_PROFILE,
+        input=text
+    )
+    response.stream_to_file(speech_file_path)
+    return speech_file_path
+
+def tts_elevenlabs(text):
+    speech_file_path = "tts_output.mp3"
+    audio = elevenlabs_client.text_to_speech.convert(
+        text=text,
+        voice_id="cgSgspJ2msm6clMCkdW9",
+        model_id="eleven_multilingual_v2",
+        output_format="mp3_44100_128",
+    )
+
+    save(audio, speech_file_path)
+
+    return speech_file_path
+
+if tts_oai:
+    tts_func = tts_openai
+else:
+    tts_func = tts_elevenlabs
 
 # Initialize the ASR pipeline
 transcriber = pipeline(
@@ -95,6 +131,11 @@ def play_enter_sound():
 
 def play_exit_sound():
     frequency = 220
+    duration = 100
+    winsound.Beep(frequency, duration)
+
+def play_asr_beep():
+    frequency = 880
     duration = 100
     winsound.Beep(frequency, duration)
 
@@ -169,7 +210,8 @@ def _transcribe_tts_oai_daemon(wf: wave.Wave_read):
     transcription = transcription_data.text.strip()
 
     # Now perform TTS with OpenAI
-    speech_file_path = tts_openai(transcription)
+    speech_file_path = tts_func(transcription)
+    play_asr_beep()
 
     # Finally, play the TTS audio in background (also non-blocking).
     threading.Thread(
@@ -193,7 +235,6 @@ def _transcribe_local(wf: wave.Wave_read):
     ).start()
 
 
-
 def transcribe_and_tts(audio_data):
     print("Transcribing audio...")
     result = transcriber({"sampling_rate": RATE, "raw": audio_data})
@@ -203,9 +244,10 @@ def transcribe_and_tts(audio_data):
     if not transcription or transcription.lower() == "you":
         print("No transcription found.")
         return
-
+    
+    play_asr_beep()
     # Now perform TTS with OpenAI
-    speech_file_path = tts_openai(transcription)
+    speech_file_path = tts_func(transcription)
 
     # Finally, play the TTS audio in background (also non-blocking).
     threading.Thread(
@@ -214,15 +256,6 @@ def transcribe_and_tts(audio_data):
         daemon=True
     ).start()
 
-def tts_openai(text):
-    speech_file_path = "tts_output.mp3"
-    response = client.audio.speech.create(
-        model="tts-1",
-        voice="nova",
-        input=text
-    )
-    response.stream_to_file(speech_file_path)
-    return speech_file_path
 
 def play_tts_audio(mp3_path):
     play_tts_beep()
