@@ -161,6 +161,9 @@ def transcribe_and_tts(audio_data):
     transcription = result['text'].strip()
     
     print("Transcription:", transcription)
+    if not transcription or transcription.lower() == "you":
+        print("No transcription found.")
+        return
 
     # Now perform TTS with OpenAI
     speech_file_path = tts_openai(transcription)
