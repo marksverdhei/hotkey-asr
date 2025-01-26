@@ -74,7 +74,7 @@ def tts_elevenlabs(text):
     audio = elevenlabs_client.text_to_speech.convert(
         text=text,
         voice_id=elabs_voice_id,
-        model_id="eleven_multilingual_v2",
+        model_id="eleven_flash_v2",
         output_format="mp3_44100_128",
     )
 
