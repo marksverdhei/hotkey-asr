@@ -6,3 +6,5 @@ hotkeys:
 device: 1
 model: "openai/whisper-base"
 key_during_tts: "l"
+
+local: false

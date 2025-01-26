@@ -49,6 +49,7 @@ PLAY_PADDING = 0.5  # seconds
 
 MODEL = config["model"]
 DEVICE = config["device"]
+LOCAL = config["local"]
 
 # Initialize the ASR pipeline
 transcriber = pipeline(
@@ -141,11 +142,47 @@ def stop_recording():
     
     # Convert WAV to numpy array for the model
     wav_buffer.seek(0)
-    with wave.open(wav_buffer, 'rb') as wf:
-        audio_data = np.frombuffer(
-            wf.readframes(wf.getnframes()), 
-            dtype=np.int16
-        ).astype(np.float32) / 32768.0
+    transcribe(wav_buffer)
+    
+
+def transcribe(wav_buffer):
+    if LOCAL:
+        with wave.open(wav_buffer, 'rb') as wf:
+
+            _transcribe_local(wf)
+    else:
+        _transcribe_oai(wav_buffer)
+    
+def _transcribe_oai(wf: wave.Wave_read):
+    setattr(wf, 'name', 'audio.wav')
+    threading.Thread(
+        target=_transcribe_tts_oai_daemon, 
+        args=(wf,), 
+        daemon=True
+    ).start()
+
+def _transcribe_tts_oai_daemon(wf: wave.Wave_read):
+    transcription_data = client.audio.transcriptions.create(
+        model="whisper-1", 
+        file=wf,
+    )
+    transcription = transcription_data.text.strip()
+
+    # Now perform TTS with OpenAI
+    speech_file_path = tts_openai(transcription)
+
+    # Finally, play the TTS audio in background (also non-blocking).
+    threading.Thread(
+        target=play_tts_audio, 
+        args=(speech_file_path,),
+        daemon=True
+    ).start()
+
+def _transcribe_local(wf: wave.Wave_read):
+    audio_data = np.frombuffer(
+        wf.readframes(wf.getnframes()), 
+        dtype=np.int16
+    ).astype(np.float32) / 32768.0
     
     # Transcribe in the same callback
     # Then do TTS *in a separate thread*:
@@ -154,6 +191,8 @@ def stop_recording():
         args=(audio_data,), 
         daemon=True
     ).start()
+
+
 
 def transcribe_and_tts(audio_data):
     print("Transcribing audio...")
