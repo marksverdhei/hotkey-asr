@@ -54,7 +54,7 @@ PLAY_PADDING = 1  # seconds
 MODEL = config["model"]
 DEVICE = config["device"]
 LOCAL = config["local"]
-
+elabs_voice_id = config["elabs_voice_id"]
 tts_oai = False
 
 elevenlabs_client = elevenlabs.ElevenLabs(api_key=os.getenv("ELEVENLABS_API_KEY"))
@@ -73,7 +73,7 @@ def tts_elevenlabs(text):
     speech_file_path = "tts_output.mp3"
     audio = elevenlabs_client.text_to_speech.convert(
         text=text,
-        voice_id="cgSgspJ2msm6clMCkdW9",
+        voice_id=elabs_voice_id,
         model_id="eleven_multilingual_v2",
         output_format="mp3_44100_128",
     )

@@ -11,3 +11,5 @@ local: true
 
 voice_profile: "nova"
 # voice_profile: "ash"
+# Matilda
+elabs_voice_id: "XrExE9yKIg1WjnnlVkGX"
