@@ -1,7 +1,6 @@
+from contextlib import contextmanager
 import time
 import winsound
-from elevenlabs import save
-import elevenlabs
 from faster_whisper import WhisperModel
 import pyaudio
 import wave
@@ -11,6 +10,19 @@ import yaml
 import io
 import numpy as np
 import sounddevice as sd
+def get_virtual_cable_device_index():
+    device_name = "CABLE Input"
+    devices = sd.query_devices()
+    vb_device = next((d for d in devices if device_name in d['name']), None)
+
+    if vb_device:
+        return vb_device['index']
+    else:
+        print("VB Cable device not found. Check the device name and try again.")
+        return None
+    
+vc = get_virtual_cable_device_index()
+sd.default.device = (vc, vc)
 from pydub import AudioSegment
 
 from pynput.keyboard import Listener as KeyboardListener, Key
@@ -21,11 +33,14 @@ import os
 import dotenv
 
 from openai import OpenAI
+import elevenlabs
 
 ############################################################
 #                 CONFIG & GLOBAL VARIABLES               #
 ############################################################
 dotenv.load_dotenv(".env")
+
+
 
 
 def convert(l) -> set:
@@ -55,7 +70,7 @@ RECORDING = False
 frames = []
 stream = None
 p = None
-PLAY_PADDING = 1  # seconds
+PLAY_PADDING = 0.5  # seconds
 
 MODEL = config["model"]
 LOCAL = config["local"]
@@ -75,18 +90,15 @@ def tts_openai(text):
     return speech_file_path
 
 def tts_elevenlabs(text):
-    speech_file_path = "tts_output.mp3"
     audio = elevenlabs_client.text_to_speech.convert(
         text=text,
+        optimize_streaming_latency=3,
         voice_id=elabs_voice_id,
         model_id="eleven_flash_v2",
         output_format="mp3_44100_128",
     )
 
-    save(audio, speech_file_path)
-
-    return speech_file_path
-
+    return audio
 if tts_oai:
     tts_func = tts_openai
 else:
@@ -235,12 +247,22 @@ def _transcribe_local(wf: wave.Wave_read):
     
     # Transcribe in the same callback
     # Then do TTS *in a separate thread*:
+    # transcribe_and_tts(audio_data)
     threading.Thread(
         target=transcribe_and_tts, 
         args=(audio_data,), 
         daemon=True
     ).start()
 
+
+@contextmanager
+def hold_key(key):
+    print(f"Holding down key: {key}")
+    keyboard_controller.press(key)
+    yield
+    time.sleep(PLAY_PADDING)
+    print(f"Releasing key: {key}")
+    keyboard_controller.release(key)
 
 def transcribe_and_tts(audio_data):
     print("Transcribing audio...")
@@ -256,14 +278,11 @@ def transcribe_and_tts(audio_data):
     
     play_asr_beep()
     # Now perform TTS with OpenAI
-    speech_file_path = tts_func(transcription)
+    audio = tts_elevenlabs(transcription)
 
-    # Finally, play the TTS audio in background (also non-blocking).
-    threading.Thread(
-        target=play_tts_audio, 
-        args=(speech_file_path,),
-        daemon=True
-    ).start()
+    with hold_key(key_during_tts):
+        elevenlabs.play(audio, use_ffmpeg=False)
+
 
 
 def play_tts_audio(mp3_path):

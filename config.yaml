@@ -12,7 +12,7 @@ local: true
 voice_profile: "nova"
 # voice_profile: "ash"
 # Matilda
-# elabs_voice_id: "XrExE9yKIg1WjnnlVkGX"
+elabs_voice_id: "XrExE9yKIg1WjnnlVkGX"
 
 # Brian
-elabs_voice_id: "nPczCjzI2devNBz1zQrb"
+# elabs_voice_id: "nPczCjzI2devNBz1zQrb"
