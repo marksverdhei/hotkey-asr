@@ -2,6 +2,7 @@ import time
 import winsound
 from elevenlabs import save
 import elevenlabs
+from faster_whisper import WhisperModel
 import pyaudio
 import wave
 import threading
@@ -18,13 +19,13 @@ from pynput.mouse import Listener as MouseListener, Button
 from transformers import pipeline
 import os
 import dotenv
-dotenv.load_dotenv(".env")
 
 from openai import OpenAI
 
 ############################################################
 #                 CONFIG & GLOBAL VARIABLES               #
 ############################################################
+dotenv.load_dotenv(".env")
 
 
 def convert(l) -> set:
@@ -39,12 +40,17 @@ sound_triggers = convert(hotkeys["record"])
 exit_triggers = convert(hotkeys["exit"])
 pressed_triggers = set()
 
+DEVICE = config["device"]
+os.environ["CUDA_VISIBLE_DEVICES"] = DEVICE  # Set to -1 to use CPU
 VOICE_PROFILE = config["voice_profile"]
+
 # Audio recording configuration
 CHUNK = 1024
 FORMAT = pyaudio.paInt16
 CHANNELS = 1
-RATE = 44100
+# RATE = 44100
+RATE = 16000
+
 RECORDING = False
 frames = []
 stream = None
@@ -52,7 +58,6 @@ p = None
 PLAY_PADDING = 1  # seconds
 
 MODEL = config["model"]
-DEVICE = config["device"]
 LOCAL = config["local"]
 elabs_voice_id = config["elabs_voice_id"]
 tts_oai = False
@@ -88,11 +93,13 @@ else:
     tts_func = tts_elevenlabs
 
 # Initialize the ASR pipeline
-transcriber = pipeline(
-    task="automatic-speech-recognition",
-    model=MODEL,
-    device=DEVICE
-)
+# transcriber = pipeline(
+#     task="automatic-speech-recognition",
+#     model=MODEL,
+#     device=DEVICE
+# )
+
+faster_model = WhisperModel("base", device="cuda" if int(DEVICE) >= 0 else "cpu")
 print(os.getenv("OPENAI_API_KEY")[-5:])
 
 client = OpenAI()
@@ -237,9 +244,11 @@ def _transcribe_local(wf: wave.Wave_read):
 
 def transcribe_and_tts(audio_data):
     print("Transcribing audio...")
-    result = transcriber({"sampling_rate": RATE, "raw": audio_data})
-    transcription = result['text'].strip()
-    
+    # result = transcriber({"sampling_rate": RATE, "raw": audio_data})
+    result = faster_model.transcribe(audio_data)
+    segments, info = result
+    transcription = "".join(segment.text for segment in segments).strip()
+
     print("Transcription:", transcription)
     if not transcription or transcription.lower() == "you":
         print("No transcription found.")

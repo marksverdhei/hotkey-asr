@@ -3,7 +3,7 @@ hotkeys:
   # record: ["Button.x1"]
   exit: ["Key.ctrl_l", "q"]
 
-device: 1
+device: "1"
 model: "openai/whisper-base"
 key_during_tts: "l"
 
