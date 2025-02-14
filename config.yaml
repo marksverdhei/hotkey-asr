@@ -1,9 +1,9 @@
 hotkeys:
   record: ["f"]
   # record: ["Button.x1"]
-  exit: ["Key.ctrl_l", "q"]
+  exit: ["Key.ctrl_l", "p"]
 
-device: "1"
+device: "0"
 model: "openai/whisper-base"
 key_during_tts: "l"
 
@@ -16,3 +16,7 @@ elabs_voice_id: "XrExE9yKIg1WjnnlVkGX"
 
 # Brian
 # elabs_voice_id: "nPczCjzI2devNBz1zQrb"
+# fireship
+# elabs_voice_id: "eVItLK1UvXctxuaRV2Oq"
+
+# elabs_voice_id: "eVItLK1UvXctxuaRV2Oq"

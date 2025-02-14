@@ -28,7 +28,7 @@ from pydub import AudioSegment
 from pynput.keyboard import Listener as KeyboardListener, Key
 from pynput.keyboard import Controller as KeyboardController
 from pynput.mouse import Listener as MouseListener, Button
-from transformers import pipeline
+# from transformers import pipeline
 import os
 import dotenv
 
@@ -95,6 +95,8 @@ def tts_elevenlabs(text):
         optimize_streaming_latency=3,
         voice_id=elabs_voice_id,
         model_id="eleven_flash_v2",
+        # model_id="eleven_multilingual_v2",
+
         output_format="mp3_44100_128",
     )
 
