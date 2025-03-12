@@ -32,7 +32,6 @@ from pynput.mouse import Listener as MouseListener, Button
 import os
 import dotenv
 
-from openai import OpenAI
 import elevenlabs
 
 ############################################################
@@ -115,8 +114,6 @@ else:
 
 faster_model = WhisperModel("base", device="cuda" if int(DEVICE) >= 0 else "cpu")
 print(os.getenv("OPENAI_API_KEY")[-5:])
-
-client = OpenAI()
 
 # Optional: parse the key string from the config
 key_during_tts_str = config.get("key_during_tts", None)  # e.g. "Key.ctrl_l" or "a"
