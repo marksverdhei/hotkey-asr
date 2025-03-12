@@ -7,3 +7,4 @@ transformers
 torchaudio
 sounddevice
 elevenlabs
+faster_whisper
