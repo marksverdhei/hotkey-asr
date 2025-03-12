@@ -5,3 +5,4 @@ pyperclip
 torch
 transformers
 torchaudio
+sounddevice
