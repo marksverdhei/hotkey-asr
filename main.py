@@ -5,11 +5,11 @@ from faster_whisper import WhisperModel
 import pyaudio
 import wave
 import threading
-import torch
 import yaml
 import io
 import numpy as np
 import sounddevice as sd
+
 def get_virtual_cable_device_index():
     device_name = "CABLE Input"
     devices = sd.query_devices()
@@ -23,6 +23,7 @@ def get_virtual_cable_device_index():
     
 vc = get_virtual_cable_device_index()
 sd.default.device = (vc, vc)
+
 from pydub import AudioSegment
 
 from pynput.keyboard import Listener as KeyboardListener, Key
@@ -78,16 +79,6 @@ tts_oai = False
 
 elevenlabs_client = elevenlabs.ElevenLabs(api_key=os.getenv("ELEVENLABS_API_KEY"))
 
-def tts_openai(text):
-    speech_file_path = "tts_output.mp3"
-    response = client.audio.speech.create(
-        model="tts-1",
-        voice=VOICE_PROFILE,
-        input=text
-    )
-    response.stream_to_file(speech_file_path)
-    return speech_file_path
-
 def tts_elevenlabs(text):
     audio = elevenlabs_client.text_to_speech.convert(
         text=text,
@@ -100,17 +91,8 @@ def tts_elevenlabs(text):
     )
 
     return audio
-if tts_oai:
-    tts_func = tts_openai
-else:
-    tts_func = tts_elevenlabs
 
-# Initialize the ASR pipeline
-# transcriber = pipeline(
-#     task="automatic-speech-recognition",
-#     model=MODEL,
-#     device=DEVICE
-# )
+tts_func = tts_elevenlabs
 
 faster_model = WhisperModel("base", device="cuda" if int(DEVICE) >= 0 else "cpu")
 print(os.getenv("OPENAI_API_KEY")[-5:])
