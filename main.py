@@ -10,6 +10,9 @@ import io
 import numpy as np
 import sounddevice as sd
 
+from transformers import pipeline
+translator = pipeline("translation", model="Helsinki-NLP/opus-mt-en-ru")
+
 def get_virtual_cable_device_index():
     device_name = "CABLE Input"
     devices = sd.query_devices()
@@ -84,8 +87,8 @@ def tts_elevenlabs(text):
         text=text,
         optimize_streaming_latency=3,
         voice_id=elabs_voice_id,
-        model_id="eleven_flash_v2",
-        # model_id="eleven_multilingual_v2",
+        # model_id="eleven_flash_v2",
+        model_id="eleven_multilingual_v2",
 
         output_format="mp3_44100_128",
     )
@@ -251,6 +254,8 @@ def transcribe_and_tts(audio_data):
     result = faster_model.transcribe(audio_data)
     segments, info = result
     transcription = "".join(segment.text for segment in segments).strip()
+
+    transcription = translator(transcription)[0]['translation_text']
 
     print("Transcription:", transcription)
     if not transcription or transcription.lower() == "you":
